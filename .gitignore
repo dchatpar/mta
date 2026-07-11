@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Local data
+data/*.db
+data/*.db-shm
+data/*.db-wal
+!data/.gitkeep
+
+# Build
+dist/
+build/
+
+# Audit/source artifacts (kept locally for reference, not for push)
+_audit-source/
+_patch_main.py
+_run_one.sh

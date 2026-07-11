@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="description" content="MTa — Mail Engine admin" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>MTa — Mail Engine</title>
+
+  <link rel="stylesheet" href="/tokens.css" />
+  <link rel="stylesheet" href="/components.css" />
+  <link rel="stylesheet" href="/app.css" />
+
+  <!-- Lucide icons (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.456.0/dist/umd/lucide.min.js"></script>
+  <script src="/icon-map.js"></script>
+  <script src="/app.js"></script>
+</head>
+<body class="light">
+  <a href="#main" class="skip-link">Skip to main content</a>
+
+  <!-- ============================================================ -->
+  <!-- TOP BAR                                                       -->
+  <!-- ============================================================ -->
+  <header class="topbar" role="banner" aria-label="Top bar">
+    <button class="theme-toggle hidden-mobile" id="btn-sidebar-toggle" aria-label="Toggle sidebar" title="Toggle sidebar">
+      <i data-lucide="menu"></i>
+    </button>
+    <div class="topbar-title">
+      <span aria-hidden="true">✉</span> MTa Admin
+    </div>
+    <div class="topbar-spacer"></div>
+    <button class="topbar-search" id="btn-open-cmdk" type="button" aria-label="Open command palette" title="Search…">
+      <i data-lucide="search" style="width:14px;height:14px"></i>
+      <span>Search…</span>
+      <span class="kbd">⌘K</span>
+    </button>
+    <button class="theme-toggle" id="btn-theme-toggle" aria-label="Toggle theme" title="Toggle light/dark">
+      <i data-lucide="moon" id="theme-icon"></i>
+    </button>
+    <button class="theme-toggle" id="btn-refresh" aria-label="Refresh" title="Refresh current page">
+      <i data-lucide="refresh-cw"></i>
+    </button>
+    <button class="theme-toggle" id="btn-logout" aria-label="Sign out" title="Sign out">
+      <i data-lucide="log-out"></i>
+    </button>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- SIDEBAR                                                       -->
+  <!-- ============================================================ -->
+  <aside class="sidebar sidebar-root" id="sidebar" role="navigation" aria-label="Primary">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">M</div>
+      <div class="sidebar-brand">MTa Admin</div>
+    </div>
+    <nav class="sidebar-nav" id="sidebar-nav" aria-label="Sections"></nav>
+    <div class="sidebar-footer sidebar-footer-info">
+      <div class="text-xs text-muted">v1.0.0 · <span id="status-engine">…</span></div>
+    </div>
+  </aside>
+
+  <!-- ============================================================ -->
+  <!-- MAIN                                                          -->
+  <!-- ============================================================ -->
+  <main class="main" id="main" role="main">
+    <div class="content-area" id="app" tabindex="-1">
+      <!-- Loading screen placeholder. app.js replaces this on boot. -->
+      <div class="empty-state">
+        <div class="spinner spinner-lg"></div>
+        <h3 class="mt-3">Loading MTa…</h3>
+        <p>Authenticating session</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============================================================ -->
+  <!-- OVERLAYS                                                       -->
+  <!-- ============================================================ -->
+  <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <div id="command-host" hidden></div>
+
+  <!-- ============================================================ -->
+  <!-- INLINE PAGE TEMPLATES                                         -->
+  <!-- 13 pages + login. Each is hidden; router swaps the active one  -->
+  <!-- into #app.                                                    -->
+  <!-- ============================================================ -->
+
+  <!-- ====== LOGIN ====== -->
+  <template id="tpl-login">
+    <div class="login-screen">
+      <div class="login-card">
+        <div class="flex items-center gap-2">
+          <div class="sidebar-logo">M</div>
+          <div class="text-bold">MTa Admin</div>
+        </div>
+        <h1 class="login-title">Sign in</h1>
+        <p class="login-subtitle">Enter your PIN to access the mail engine.</p>
+        <form id="form-login" autocomplete="off">
+          <div class="form-field">
+            <label class="label" for="login-pin">PIN</label>
+            <input class="input login-pin-input" id="login-pin" name="pin"
+                   type="password" inputmode="numeric" autocomplete="current-password"
+                   placeholder="••••" required minlength="4" maxlength="8" autofocus />
+          </div>
+          <div class="form-field">
+            <button class="btn btn-primary btn-block" type="submit">
+              <i data-lucide="log-in"></i> Sign in
+            </button>
+          </div>
+          <div id="login-error" class="form-message form-message-error hidden" role="alert"></div>
+        </form>
+        <p class="login-hint">Default PIN is 0000 in dev environments.</p>
+      </div>
+    </div>
+  </template>
+
+  <!-- ====== DASHBOARD ====== -->
+  <template id="tpl-dashboard">
+    <div class="page-fade-in">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Dashboard</h1>
+          <p class="page-subtitle">Live overview of engine throughput, queues, and accounts.</p>
+        </div>
+        <div class="page-actions">
+          <span class="badge badge-success badge-dot" id="dash-engine-status">Engine: …</span>
+          <button class="btn btn-outline btn-sm" data-action="refresh">
+            <i data-lucide="refresh-cw"></i> Refresh
+          </button>
+        </div>
+      </div>
+
+      <div class="grid-4">
+        <div class="card card-compact">
+          <div class="card-content">
+            <div class="stat-tile">
+              <div class="stat-label">Messages in flight</div>
+              <div class="stat-value" id="stat-messages">—</div>
+              <div class="stat-trend" id="stat-messages-trend">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="card card-compact">
+          <div class="card-content">
+            <div class="stat-tile">
+              <div class="stat-label">Delivered today</div>
+              <div class="stat-value" id="stat-delivered">—</div>
+              <div class="stat-trend stat-trend-up"><i data-lucide="trending-up"></i> Live</div>
+            </div>
+          </div>
+        </div>
+        <div class="card card-compact">
+          <div class="card-content">
+            <div class="stat-tile">
+              <div class="stat-label">Bounce rate</div>
+              <div class="stat-value" id="stat-bounce">—</div>
+              <div class="stat-trend">Last hour</div>
+            </div>
+          </div>
+        </div>
+        <div class="card card-compact">
+          <div class="card-content">
+            <div class="stat-tile">
+              <div class="stat-label">Active tenants</div>
+              <div class="stat-value" id="stat-tenants">—</div>
+              <div class="stat-trend">Metered senders</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2 mt-6">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Queue snapshot</h2>
+            <p class="card-description">Ready and scheduled message counts per queue.</p>
+          </div>
+          <div class="card-content" id="dash-queues"></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Recent messages</h2>
+            <p class="card-description">Tail of in-flight events.</p>
+          </div>
+          <div class="card-content live-stream" id="dash-recent"></div>
+          <div class="card-footer">
+            <a href="#/messages" class="btn btn-link">Open message log →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2 mt-6">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Engine metrics</h2>
+            <p class="card-description">Snapshot of the underlying mail engine.</p>
+          </div>
+          <div class="card-content">
+            <pre class="code-block" id="dash-metrics">awaiting /api/engine/metrics…</pre>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Account credits</h2>
+            <p class="card-description">Top balances across active tenants.</p>
+          </div>
+          <div class="card-content" id="dash-credits"></div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ====== MESSAGES ====== -->
+  <template id="tpl-messages">
+    <div class="page-fade-in">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Messages</h1>
+          <p class="page-subtitle">Live, real-time tail of message events.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-outline btn-sm" data-action="toggle-stream">
+            <i data-lucide="pause"></i> <span id="messages-stream-label">Pause</span>
+          </button>
+          <button class="btn btn-outline btn-sm" data-action="clear">
+            <i data-lucide="trash-2"></i> Clear
+          </button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-content p-0">
+          <div class="table-wrap" style="border:0">
+            <table class="table table-mono">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Status</th>
+                  <th>Recipient</th>
+                  <th>Subject</th>
+                  <th>Queue</th>
+                  <th>Tenant</th>
+                  <th>ID</th>
+                </tr>
+              </thead>
+              <tbody id="messages-tbody">
+                <tr><td colspan="7" class="empty-state">Connecting to live stream…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="text-xs text-muted" id="messages-count">0 events</span>
+          <a href="#/queues" class="btn btn-link">View queues →</a>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ====== QUEUES ====== -->
+  <template id="tpl-queues">
+    <div class="page-fade-in">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Queues</h1>
+          <p class="page-subtitle">All known ready/scheduled queues from the engine.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-outline btn-sm" data-action="refresh">
+            <i data-lucide="refresh-cw"></i> Refresh
+          </button>
+        </div>
+      </div>
+      <div class="grid-3" id="queues-grid"></div>
+    </div>
+  </template>
+
+  <!-- ====== SEND ====== -->
+  <template id="tpl-send">
+    <div class="page-fade-in">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Send</h1>
+          <p class="page-subtitle">Compose and dispatch a message through the engine.</p>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Compose</h2>
+            <p class="card-description">Single message dispatch. Larger jobs use the batch/template endpoints.</p>
+          </div>
+          <div class="card-content">
+            <form id="form-send" autocomplete="off">
+              <div class="form-field">
+                <label class="label" for="send-tenant">Tenant ID</label>
+                <input class="input input-mono" id="send-tenant" name="tenant"
+                       placeholder="e.g. acme" required />
+                <p class="form-description">Your account key as registered in credits/tenants.</p>
+              </div>
+              <div class="grid-2">
+                <div class="form-field">
+                  <label class="label" for="send-from">From</label>
+                  <input class="input" id="send-from" name="from"
+                         placeholder="sender@yourdomain.com" required />
+                </div>
+                <div class="form-field">
+                  <label class="label" for="send-to">To</label>
+                  <input class="input" id="send-to" name="to"
+                         placeholder="recipient@example.com" required />
+                </div>
+              </div>
+              <div class="form-field">
+                <label class="label" for="send-subject">Subject</label>
+                <input class="input" id="send-subject" name="subject" required />
+              </div>
+              <div class="form-field">
+                <label class="label" for="send-body">Body</label>
+                <textarea class="textarea" id="send-body" name="body"
+                          rows="8" required>Hello from MTa.</textarea>
+              </div>
+              <div class="form-field">
+                <button type="submit" class="btn btn-primary">
+                  <i data-lucide="send"></i> Dispatch
+                </button>
+                <p class="form-message form-message-success hidden" id="send-ok" role="status"></p>
+                <p class="form-message form-message-error hidden" id="send-err" role="alert"></p>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">API reference</h2>
+            <p class="card-description">How this form talks to the engine.</p>
+          </div>
+          <div class="card-content">
+            <p class="text-sm text-muted mb-2">This form POSTs to:</p>
+            <pre class="code-block">POST /api/v1/send
+Authorization: Bearer &lt;session&gt;
+Content-Type: application/json
+
+{
+  "tenant": "&lt;id&gt;",
+  "from":    "&lt;addr&gt;",
+  "to":      "&lt;addr&gt;",
+  "subject": "&lt;...&gt;",
+  "body":    "&lt;...&gt;"
+}</pre>
+            <p class="text-sm text-muted mt-4 mb-2">Alternative endpoints:</p>
+            <ul class="text-sm text-muted stack-2" style="padding-left: 18px">
+              <li><code>POST /api/v1/send/batch</code> — many recipients, one template</li>
+              <li><code>POST /api/v1/send/template</code> — render with handlebars-style vars</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ====== CUSTOMERS (tenants list) ====== -->
+  <template id="tpl-customers">
+    <div class="page-fade-in">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Customers</h1>
+          <p class="page-subtitle">Active tenant accounts, balances, and recent usage.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-outline btn-sm" data-action="refresh">
+            <i data-lucide="refresh-cw"></i> Refresh
+          </button>
+          <button class="btn btn-primary btn-sm" data-action="create">
+            <i data-lucide="user-plus"></i> New tenant
+          </button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-content p-0">
+          <div class="table-wrap" style="border:0">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Tenant</th>
+                  <th>Display name</th>
+                  <th>Balance</th>
+                  <th>Sent</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="customers-tbody">
+                <tr><td colspan="6" class="empty-state">Loading tenants…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ====== CUSTOMER DETAIL ====== -->
+  <template id="tpl-customer-detail">
+    <div class="page-fade-in">
+      <div class="page-header">
+        <div>
+          <a href="#/customers" class="text-xs text-muted">
+            <i data-lucide="chevron-left"></i> Customers
+          </a>
+          <h1 class="page-title" id="cd-title">Tenant —</h1>
+          <p class="page-subtitle" id="cd-sub">Inspecting account…</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-outline btn-sm" data-action="refresh">
+            <i data-lucide="refresh-cw"></i> Refresh
+          </button>
+          <button class="btn btn-primary btn-sm" data-action="topup">
+            <i data-lucide="circle-dollar-sign"></i> Top up
+          </button>
+        </div>
+      </div>
+      <div class="grid-3">
+        <div class="card card-compact">
+          <div class="card-content">
+            <div class="stat-tile">
+              <div class="stat-label">Balance</div>
+              <div class="stat-value" id="cd-balance">—</div>
+              <div class="stat-trend">credits</div>
+            </div>
+          </div>
+        </div>
+        <div class="card card-compact">
+          <div class="card-content">
+            <div class="stat-tile">
+              <div class="stat-label">Sent today</div>
+              <div class="stat-value" id="cd-sent-today">—</div>
+              <div class="stat-trend">messages</div>
+            </div>
+          </div>
+        </div>
+        <div class="card card-compact">
+          <div class="card-content">
+            <div class="stat-tile">
+              <div class="stat-label">Status</div>
+              <div class="stat-value" id="cd-status">—</div>
+              <div class="stat-trend">active / suspended</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card mt-6">
+        <div class="card-header">
+          <h2 class="card-title">Recent usage</h2>
+          <p class="card-description">Last 20 chargeable events for this tenant.</p>
+        </div>
+        <div class="card-content">
+          <div class="live-stream" id="cd-usage"></div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ====== API KEYS (SMTP users) ====== -->
+  <template id="tpl-apikeys">
+    <div class="page-fade-in">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">API keys & SMTP users</h1>
+          <p class="page-subtitle">Authenticated credentials for outbound senders.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-outline btn-sm" data-action="refresh">
+            <i data-lucide="refresh-cw"></i> Refresh
+          </button>
+          <button class="btn btn-primary btn-sm" data-action="create">
+            <i data-lucide="plus"></i> New user
+          </button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-content p-0">
+          <div class="table-wrap" style="border:0">
+            <table class="table table-mono">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Username</th>
+                  <th>Tenant</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="apikeys-tbody">
+                <tr><td colspan="5" class="empty-state">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ====== WEBHOOKS ====== -->
+  <template id="tpl-webhooks">
+    <div class="page-fade-in">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Webhooks</h1>
+          <p class="page-subtitle">Outbound delivery webhooks and recent deliveries.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-outline btn-sm" data-action="refresh">
+            <i data-lucide="refresh-cw"></i> Refresh
+          </button>
+          <button class="btn btn-primary btn-sm" data-action="create">
+            <i data-lucide="plus"></i> Register hook
+          </button>
+        </div>
+      </div>
+      <div class="card mb-4">
+        <div class="card-header">
+          <h2 class="card-title">Registered hooks</h2>
+          <p class="card-description">Subscribed URL and active deliveries.</p>
+        </div>
+        <div class="card-content p-0">
+          <div class="table-wrap" style="border:0">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>URL</th>
+                  <th>Events</th>
+                  <th>Tenant</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="webhooks-tbody">
+                <tr><td colspan="4" class="empty-state">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Recent deliveries</h2>
+          <p class="card-description">Tail of hook deliveries.</p>
+        </div>
+        <div class="card-content p-0">
+          <div class="table-wrap" style="border:0">
+            <table class="table table-mono table-compact">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>URL</th>
+                  <th>Response</th>
+                  <th>Latency</th>
+                </tr>
+              </thead>
+              <tbody id="webhook-deliveries-tbody">
+                <tr><td colspan="4" class="empty-state">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ====== REPUTATION ====== -->
+  <template id="tpl-reputation">
+    <div class="page-fade-in">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Reputation</h1>
+          <p class="page-subtitle">Check domains and IPs against public blocklists.</p>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">DBL check (domain)</h2>
+            <p class="card-description">Spamhaus DBL lookup for a sending domain.</p>
+          </div>
+          <div class="card-content">
+            <form id="form-dbl">
+              <div class="form-field">
+                <label class="label" for="dbl-domain">Domain</label>
+                <input class="input input-mono" id="dbl-domain" name="domain"
+                       placeholder="example.com" required />
+              </div>
+              <button class="btn btn-primary" type="submit">
+                <i data-lucide="shield-check"></i> Check
+              </button>
+            </form>
+            <div class="mt-4" id="dbl-result"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">ZEN check (IP)</h2>
+            <p class="card-description">Spamhaus ZEN lookup for a sending IP.</p>
+          </div>
+          <div class="card-content">
+            <form id="form-zen">
+              <div class="form-field">
+                <label class="label" for="zen-ip">IP address</label>
+                <input class="input input-mono" id="zen-ip" name="ip"
+                       placeholder="203.0.113.10" required />
+              </div>
+              <button class="btn btn-primary" type="submit">
+                <i data-lucide="shield"></i> Check
+              </button>
+            </form>
+            <div class="mt-4" id="zen-result"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card mt-6">
+        <div class="card-header">
+          <h2 class="card-title">SURBL check (URL)</h2>
+          <p class="card-description">Check if a URL appears on URI-based blocklists.</p>
+        </div>
+        <div class="card-content">
+          <form id="form-surbl" class="flex gap-2 items-center">
+            <input class="input input-mono flex-1" id="surbl-url" name="url"
+                   placeholder="https://example.com/page" required />
+            <button class="btn btn-primary" type="submit">
+              <i data-lucide="shield-alert"></i> Check
+            </button>
+          </form>
+          <div class="mt-4" id="surbl-result"></div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ====== DNS (Cloudflare) ====== -->
+  <template id="tpl-dns">
+    <div class="page-fade-in">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">DNS & Cloudflare</h1>
+          <p class="page-subtitle">Zones, records, and DKIM for sender domains.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-outline btn-sm" data-action="refresh">
+            <i data-lucide="refresh-cw"></i> Refresh
+          </button>
+        </div>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Zones</h2>
+            <p class="card-description">All Cloudflare zones wired to MTa.</p>
+          </div>
+          <div class="card-content" id="dns-zones"></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">DNS lookup</h2>
+            <p class="card-description">Resolve any hostname via the engine.</p>
+          </div>
+          <div class="card-content">
+            <form id="form-dns-lookup">
+              <div class="form-field">
+                <input class="input input-mono" id="dns-host" name="host"
+                       placeholder="selector._domainkey.example.com" required />
+              </div>
+              <button class="btn btn-primary" type="submit">
+                <i data-lucide="search"></i> Look up
+              </button>
+            </form>
+            <div class="mt-4" id="dns-lookup-result"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">DKIM wizard</h2>
+            <p class="card-description">Generate a DKIM keypair for a new selector.</p>
+          </div>
+          <div class="card-content">
+            <form id="form-dkim">
+              <div class="form-field">
+                <label class="label" for="dkim-domain">Domain</label>
+                <input class="input input-mono" id="dkim-domain" name="domain"
+                       placeholder="example.com" required />
+              </div>
+              <div class="form-field">
+                <label class="label" for="dkim-selector">Selector</label>
+                <input class="input input-mono" id="dkim-selector" name="selector"
+                       placeholder="mt2025" required value="mt" />
+              </div>
+              <button class="btn btn-primary" type="submit">
+                <i data-lucide="key-round"></i> Generate
+              </button>
+            </form>
+            <div class="mt-4" id="dkim-result"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ====== AI / M3 ====== -->
+  <template id="tpl-ai">
+    <div class="page-fade-in">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">AI assistant</h1>
+          <p class="page-subtitle">Ask M3 about your engine, queues, or recent traffic.</p>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Chat</h2>
+            <p class="card-description">Free-form question. Responses stream from the assistant.</p>
+          </div>
+          <div class="card-content">
+            <form id="form-ai-chat" class="stack">
+              <div class="form-field">
+                <label class="label" for="ai-prompt">Your question</label>
+                <textarea class="textarea" id="ai-prompt" rows="4"
+                          placeholder="What is the queue depth right now?"></textarea>
+              </div>
+              <div class="form-row">
+                <button class="btn btn-primary" type="submit">
+                  <i data-lucide="send"></i> Send
+                </button>
+                <button class="btn btn-outline" type="button" data-action="golden">
+                  <i data-lucide="sparkles"></i> Golden Q&amp;A
+                </button>
+              </div>
+              <div class="mt-3" id="ai-output"></div>
+            </form>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Insights</h2>
+            <p class="card-description">Background insights about your traffic and reputation.</p>
+          </div>
+          <div class="card-content" id="ai-insights">
+            <div class="loading-block"><div class="spinner"></div> Loading insights…</div>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-outline btn-sm" data-action="refresh">
+              <i data-lucide="refresh-cw"></i> Refresh
+            </button>
+            <button class="btn btn-outline btn-sm" data-action="diagnose">
+              <i data-lucide="activity"></i> Diagnose
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ====== SETTINGS ====== -->
+  <template id="tpl-settings">
+    <div class="page-fade-in">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Settings</h1>
+          <p class="page-subtitle">Engine config, theme, and access controls.</p>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Engine configuration</h2>
+            <p class="card-description">Files stored in <code class="text-mono">/opt/mta/etc/</code>.</p>
+          </div>
+          <div class="card-content p-0">
+            <div class="table-wrap" style="border:0">
+              <table class="table text-mono text-sm">
+                <thead>
+                  <tr><th>File</th><th>Format</th><th>Bytes</th><th></th></tr>
+                </thead>
+                <tbody id="settings-files-tbody">
+                  <tr><td colspan="4" class="empty-state">Loading config files…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Account</h2>
+            <p class="card-description">Session, theme, and PIN.</p>
+          </div>
+          <div class="card-content stack">
+            <div class="form-field">
+              <label class="label">Theme</label>
+              <div class="flex gap-2">
+                <button class="btn btn-outline" data-action="theme-light">
+                  <i data-lucide="sun"></i> Light
+                </button>
+                <button class="btn btn-outline" data-action="theme-dark">
+                  <i data-lucide="moon"></i> Dark
+                </button>
+                <button class="btn btn-outline" data-action="theme-auto">
+                  <i data-lucide="circle-dot"></i> Auto
+                </button>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="label" for="settings-pin-new">Change PIN</label>
+              <input class="input login-pin-input" id="settings-pin-new"
+                     inputmode="numeric" maxlength="8" minlength="4"
+                     placeholder="New PIN" />
+              <button class="btn btn-primary mt-2" type="button" data-action="change-pin">
+                Update PIN
+              </button>
+              <p class="form-message form-message-error hidden mt-2" id="settings-pin-err"></p>
+              <p class="form-message form-message-success hidden mt-2" id="settings-pin-ok"></p>
+            </div>
+            <hr class="separator separator-h" />
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm text-bold">Compact mode</div>
+                <div class="text-xs text-muted">Reduce sidebar width</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="settings-compact" />
+                <span class="switch-track"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+</body>
+</html>
